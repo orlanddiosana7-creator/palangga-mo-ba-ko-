@@ -79,7 +79,7 @@ footer { text-align:center; color:#6a7c70; font-size:11px; padding:16px 8px 4px;
     <button class="primary" id="customModeBtn">Create Your Love Quiz 💞</button>
     <button class="primary secondary" id="joinRoomBtn">Join Partner's Room 💌</button>
     <p style="font-size:12px;color:#52675a">Online multiplayer needs Firebase setup first.</p>
-  </section>
+  </section> 
 
   <section id="quizScreen" class="card hidden" aria-live="polite">
     <div class="topline">
@@ -1606,13 +1606,13 @@ function nextCustomQuestion() {
 
 // Firebase Realtime Database configuration: replace these placeholder values with your own Firebase web app config.
 const firebaseConfig = {
-  apiKey: "PASTE_YOUR_API_KEY_HERE",
-  authDomain: "PASTE_YOUR_PROJECT_ID_HERE.firebaseapp.com",
+  apiKey:"AIzaSyCaJUDNaPUm3w40QI9bTbvqdhdO4wgQzOE",
+  authDomain:"palangga-mo-ba-ko.firebaseapp.com",
   databaseURL: "https://PASTE_YOUR_PROJECT_ID_HERE-default-rtdb.firebaseio.com",
-  projectId: "PASTE_YOUR_PROJECT_ID_HERE",
-  storageBucket: "PASTE_YOUR_PROJECT_ID_HERE.appspot.com",
-  messagingSenderId: "PASTE_YOUR_MESSAGING_SENDER_ID_HERE",
-  appId: "PASTE_YOUR_APP_ID_HERE"
+  projectId:"https://palangga-mo-ba-ko-default-rtdb.firebaseio.com",
+  storageBucket: "palangga-mo-ba-ko.firebasestorage.app",
+  messagingSenderId: "578691061608",
+  appId:"1:578691061608:web:353a4e22d5cdbb1342e8dd",
 };
 let db = null, activeRoomCode = "", onlineRole = "", roomUnsubscribe = null, onlineAnswered = false;
 function firebaseReady() {

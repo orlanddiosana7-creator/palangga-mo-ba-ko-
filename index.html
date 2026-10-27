@@ -1585,4 +1585,11 @@ $("nextBtn").addEventListener("click", nextQuestion);
 $("restartBtn").addEventListener("click", openCustomSetup);
 </script>
 </body>
-</html>
+</html>const supabaseUrl = 'https://eieqwlnjgnxtcuyyprph.supabase.co';
+const supabaseKey = 'PASTE_YOUR_SUPABASE_PUBLISHABLE_KEY_HERE';
+
+const supabase = window.supabase.createClient(
+  supabaseUrl,
+  supabaseKey
+);
+

@@ -77,6 +77,8 @@ footer { text-align:center; color:#6a7c70; font-size:11px; padding:16px 8px 4px;
     <p>A love quiz made by you! Player 1 can create as many questions as they want, then pass the phone to Player 2 to answer them all. Wrong answers bring out the crying cat! 😿</p>
     <div class="rules"><span>💗 Two-player love quiz</span><span>💌 Your own questions</span><span>😿 Crying cat</span><span>🔊 Sound</span></div>
     <button class="primary" id="customModeBtn">Create Your Love Quiz 💞</button>
+    <button class="primary secondary" id="joinRoomBtn">Join Partner's Room 💌</button>
+    <p style="font-size:12px;color:#52675a">Online multiplayer needs Supabase setup first.</p>
   </section>
 
   <section id="quizScreen" class="card hidden" aria-live="polite">
@@ -114,7 +116,8 @@ footer { text-align:center; color:#6a7c70; font-size:11px; padding:16px 8px 4px;
     <label for="customFact" style="display:block;font-weight:750;margin:12px 0 6px">Optional message after the guess</label>
     <input id="customFact" placeholder="Example: Of course, palangga! 💗" style="width:100%;padding:12px;border:2px solid #e0e9e1;border-radius:12px;font:inherit">
     <button class="primary secondary" id="addCustomQuestionBtn">＋ Add This Question</button>
-    <button class="primary" id="showCustomQuestionBtn">Finish & Pass to Player 2 💌</button>
+    <button class="primary" id="showCustomQuestionBtn">Finish & Pass on This Phone 💌</button>
+    <button class="primary" id="createRoomBtn">Create Online Room 🌐</button>
     <button class="primary secondary" id="backHomeBtn">Back</button>
   </section>
 
@@ -127,6 +130,32 @@ footer { text-align:center; color:#6a7c70; font-size:11px; padding:16px 8px 4px;
     <button class="primary hidden" id="customNextBtn">Next Question →</button>
     <button class="primary hidden" id="customAgainBtn">Player 1: Create a New Quiz ↻</button>
     <button class="primary secondary" id="customHomeBtn">Main Menu</button>
+  </section>
+
+
+
+  <section id="joinRoomScreen" class="card hidden">
+    <div class="category">Player 2 — Join your palangga 💗</div>
+    <h2>Enter your room code</h2>
+    <p>Ask Player 1 for the six-character code.</p>
+    <input id="roomCodeInput" maxlength="6" autocapitalize="characters" placeholder="ABC123" style="width:100%;padding:14px;border:2px solid #e0e9e1;border-radius:12px;font:inherit;text-transform:uppercase;letter-spacing:3px;text-align:center">
+    <button class="primary" id="joinRoomSubmitBtn">Join Room 💌</button>
+    <button class="primary secondary" id="joinBackBtn">Back</button>
+    <p id="joinStatus" role="status"></p>
+  </section>
+
+  <section id="onlineScreen" class="card hidden" aria-live="polite">
+    <div class="topline"><span class="pill" id="onlineRole">Online quiz</span><span class="pill" id="onlineStatus">Connecting…</span></div>
+    <div class="category">Room code</div>
+    <h2 id="onlineRoomCode" style="letter-spacing:4px;text-align:center">------</h2>
+    <p id="onlineMessage" style="text-align:center">Waiting…</p>
+    <div class="progress"><div id="onlineProgressBar"></div></div>
+    <h2 id="onlineQuestionText"></h2>
+    <div class="answers" id="onlineAnswers"></div>
+    <div class="feedback" id="onlineFeedback" role="status"></div>
+    <button class="primary hidden" id="hostStartBtn">Start Quiz 💗</button>
+    <button class="primary hidden" id="hostNextBtn">Next Question →</button>
+    <button class="primary secondary" id="onlineExitBtn">Leave Room</button>
   </section>
 
   <div id="catOverlay" aria-live="assertive" role="alert" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(20,4,15,.82);align-items:center;justify-content:center;padding:22px;text-align:center">
@@ -153,6 +182,7 @@ footer { text-align:center; color:#6a7c70; font-size:11px; padding:16px 8px 4px;
   <footer>Made for curious Pinoy learners • Works offline after opening once if saved locally</footer>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const questions = [
   {
@@ -1389,7 +1419,7 @@ function toggleSound() {
 }
 const $ = id => document.getElementById(id);
 function showScreen(id) {
-  ["startScreen","quizScreen","customSetupScreen","customPlayScreen","resultScreen"].forEach(s => $(s).classList.toggle("hidden", s !== id));
+  ["startScreen","quizScreen","customSetupScreen","customPlayScreen","resultScreen","joinRoomScreen","onlineScreen"].forEach(s => $(s).classList.toggle("hidden", s !== id));
 }
 function startQuiz() {
   playTone("start");
@@ -1572,6 +1602,144 @@ function nextCustomQuestion() {
   }
 }
 
+
+// Supabase configuration: paste your Project URL and anon/public key below.
+const SUPABASE_URL = "PASTE_YOUR_SUPABASE_PROJECT_URL_HERE";
+const SUPABASE_ANON_KEY = "PASTE_YOUR_SUPABASE_ANON_KEY_HERE";
+let sb = null, activeRoomCode = "", onlineRole = "", roomPollTimer = null, onlineAnswered = false;
+function supabaseReady() {
+  if (!window.supabase || SUPABASE_URL.includes("PASTE_") || SUPABASE_ANON_KEY.includes("PASTE_")) {
+    alert("Online multiplayer needs your Supabase Project URL and anon/public key in index.html, plus the SQL setup from README.txt.");
+    return false;
+  }
+  if (!sb) sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return true;
+}
+function makeRoomCode() {
+  return Math.random().toString(36).slice(2, 8).toUpperCase().replace(/[^A-Z0-9]/g, "X").padEnd(6, "X");
+}
+function showJoinRoom() {
+  $("roomCodeInput").value = ""; $("joinStatus").textContent = ""; showScreen("joinRoomScreen");
+}
+async function getRoom(code) {
+  const { data, error } = await sb.from("rooms").select("room_data").eq("code", code).maybeSingle();
+  if (error) throw error;
+  return data ? data.room_data : null;
+}
+async function saveRoom(code, room) {
+  const { error } = await sb.from("rooms").update({ room_data: room }).eq("code", code);
+  if (error) throw error;
+}
+async function createOnlineRoom() {
+  if (!customQuestionSet.length) { alert("Please add at least one question first."); return; }
+  if (!supabaseReady()) return;
+  const btn = $("createRoomBtn"); btn.disabled = true;
+  try {
+    let code = makeRoomCode(), room = null;
+    for (let i=0; i<8; i++) {
+      room = await getRoom(code);
+      if (!room) break;
+      code = makeRoomCode();
+    }
+    if (room) throw new Error("Could not generate a unique room code. Please try again.");
+    const roomData = { questions: customQuestionSet, currentIndex: -1, status: "waiting", createdAt: Date.now(), lastResult: "", answeredIndex: null };
+    const { error } = await sb.from("rooms").insert({ code, room_data: roomData });
+    if (error) throw error;
+    activeRoomCode = code; onlineRole = "host"; onlineAnswered = false;
+    showScreen("onlineScreen"); $("onlineRoomCode").textContent = code;
+    $("onlineRole").textContent = "Player 1 — Host 💗";
+    $("onlineStatus").textContent = "Waiting for Player 2";
+    $("onlineMessage").textContent = "Share this code with your partner. Keep this page open.";
+    $("hostStartBtn").classList.remove("hidden"); $("hostNextBtn").classList.add("hidden");
+    watchOnlineRoom();
+  } catch (e) { alert("Couldn't create room. Check the Supabase URL/key and SQL setup in README.txt. " + e.message); }
+  finally { btn.disabled = false; }
+}
+async function joinOnlineRoom() {
+  if (!supabaseReady()) return;
+  const code = $("roomCodeInput").value.trim().toUpperCase();
+  if (!/^[A-Z0-9]{6}$/.test(code)) { $("joinStatus").textContent = "Enter the 6-character room code."; return; }
+  try {
+    const room = await getRoom(code);
+    if (!room) { $("joinStatus").textContent = "Room not found. Check the code and try again."; return; }
+    activeRoomCode = code; onlineRole = "player"; onlineAnswered = false;
+    showScreen("onlineScreen"); $("onlineRoomCode").textContent = code; $("onlineRole").textContent = "Player 2 💗";
+    $("hostStartBtn").classList.add("hidden"); $("hostNextBtn").classList.add("hidden"); watchOnlineRoom();
+  } catch (e) { $("joinStatus").textContent = "Could not join: " + e.message; }
+}
+function watchOnlineRoom() {
+  if (roomPollTimer) clearInterval(roomPollTimer);
+  const refresh = async () => {
+    try {
+      const room = await getRoom(activeRoomCode);
+      if (!room) { $("onlineStatus").textContent = "Room closed"; $("onlineMessage").textContent = "This room is no longer available."; return; }
+      $("onlineRoomCode").textContent = activeRoomCode;
+      if (room.status === "waiting") {
+        $("onlineStatus").textContent = "Waiting";
+        $("onlineMessage").textContent = onlineRole === "host" ? "Share the code with Player 2, then start the quiz." : "Connected! Waiting for Player 1 to start…";
+        $("onlineQuestionText").textContent = ""; $("onlineAnswers").innerHTML = ""; $("onlineFeedback").textContent = ""; return;
+      }
+      if (room.status === "finished") {
+        $("onlineStatus").textContent = "Complete"; $("onlineMessage").textContent = "Quiz complete! Thank you for playing, palangga. 💗";
+        $("onlineQuestionText").textContent = "💗 You finished the quiz!"; $("onlineAnswers").innerHTML = ""; $("hostNextBtn").classList.add("hidden"); return;
+      }
+      const idx = Number(room.currentIndex || 0), q = (room.questions || [])[idx]; if (!q) return;
+      $("onlineStatus").textContent = `Question ${idx+1} of ${room.questions.length}`;
+      $("onlineMessage").textContent = onlineRole === "host" ? "Your partner is answering on their phone." : "Choose your answer, palangga! 💌";
+      $("onlineProgressBar").style.width = `${((idx+1)/room.questions.length)*100}%`; $("onlineQuestionText").textContent = q.question;
+      if (onlineRole === "host") {
+        $("onlineAnswers").innerHTML = ""; $("onlineFeedback").textContent = room.lastResult || "Waiting for your partner's answer…";
+        $("hostNextBtn").textContent = idx === room.questions.length-1 ? "Finish Quiz 💗" : "Next Question →";
+        $("hostNextBtn").classList.remove("hidden"); $("hostStartBtn").classList.add("hidden");
+      } else {
+        if (room.lastResult) $("onlineFeedback").textContent = room.lastResult;
+        if (!onlineAnswered || room.answeredIndex !== idx) {
+          onlineAnswered = false; $("onlineAnswers").innerHTML = "";
+          q.options.forEach((option, i) => {
+            const b = document.createElement("button"); b.className = "answer"; b.textContent = `${String.fromCharCode(65+i)}. ${option}`;
+            b.addEventListener("click", async () => {
+              if (onlineAnswered) return; onlineAnswered = true;
+              const good = i === q.answer;
+              [...$("onlineAnswers").querySelectorAll("button")].forEach((x,j) => { x.disabled=true; if(j===i) x.classList.add(good?"correct":"wrong"); if(j===q.answer) x.classList.add("correct"); });
+              if (good) playTone("correct"); else { playTone("wrong"); $("catOverlay").style.display="flex"; }
+              const message = good ? "💗 Correct! " + (q.fact || "Well done!") : "😿 MALI?! Correct answer: " + q.options[q.answer] + ". " + (q.fact || "");
+              $("onlineFeedback").textContent = message;
+              try { const latest = await getRoom(activeRoomCode); if (latest) { latest.answeredIndex = idx; latest.lastResult = message; await saveRoom(activeRoomCode, latest); } } catch(e) { $("onlineFeedback").textContent = "Answer shown, but syncing failed: " + e.message; }
+            });
+            $("onlineAnswers").appendChild(b);
+          });
+          $("onlineFeedback").textContent = "";
+        } else { $("onlineFeedback").textContent = room.lastResult || "Answer submitted!"; }
+      }
+    } catch(e) { $("onlineStatus").textContent = "Connection error"; $("onlineMessage").textContent = e.message; }
+  };
+  refresh(); roomPollTimer = setInterval(refresh, 1800);
+}
+async function hostStartOnline() {
+  if (!supabaseReady() || !activeRoomCode) return;
+  try { const room = await getRoom(activeRoomCode); if (!room) return; room.currentIndex=0; room.status="playing"; room.lastResult=""; room.answeredIndex=null; await saveRoom(activeRoomCode, room); }
+  catch(e) { alert("Could not start quiz: " + e.message); }
+}
+async function hostNextOnline() {
+  if (!activeRoomCode) return;
+  try { const room = await getRoom(activeRoomCode); if (!room) return; const next = Number(room.currentIndex)+1;
+    if (next >= room.questions.length) { room.status="finished"; room.lastResult="Quiz complete! 💗"; }
+    else { room.currentIndex=next; room.lastResult=""; room.answeredIndex=null; }
+    await saveRoom(activeRoomCode, room);
+  } catch(e) { alert("Could not move to next question: " + e.message); }
+}
+function leaveOnline() {
+  if (roomPollTimer) { clearInterval(roomPollTimer); roomPollTimer=null; }
+  activeRoomCode = ""; onlineRole = ""; showScreen("startScreen");
+}
+$("joinRoomBtn").addEventListener("click", showJoinRoom);
+$("joinBackBtn").addEventListener("click", () => showScreen("startScreen"));
+$("joinRoomSubmitBtn").addEventListener("click", joinOnlineRoom);
+$("createRoomBtn").addEventListener("click", createOnlineRoom);
+$("hostStartBtn").addEventListener("click", hostStartOnline);
+$("hostNextBtn").addEventListener("click", hostNextOnline);
+$("onlineExitBtn").addEventListener("click", leaveOnline);
+
 $("soundBtn").addEventListener("click", toggleSound);
 $("customModeBtn").addEventListener("click", openCustomSetup);
 $("addCustomQuestionBtn").addEventListener("click", addCustomQuestion);
@@ -1585,7 +1753,4 @@ $("nextBtn").addEventListener("click", nextQuestion);
 $("restartBtn").addEventListener("click", openCustomSetup);
 </script>
 </body>
-</html>const supabaseUrl = 'https://eieqwlnjgnxtcuyyprph.supabase.co'
-const supabaseKey = '@supabase/supabase-js'
-
-
+</html>
